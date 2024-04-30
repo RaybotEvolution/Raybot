@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Motor Control</title>
+    <style>
+        .column {
+            float: left;
+            width: 50%;
+            box-sizing: border-box;
+            padding: 10px;
+        }
+        .row:after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+        .motor-control {
+            margin-bottom: 10px;
+        }
+        label, input, button {
+            margin-right: 10px;
+        }
+        #limitControls {
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>设备控制</h1>
+    <div class="row">
+        <div class="column" id="left">
+            <h2>左手 (IP: 192.168.1.200)</h2>
+            <button onclick="enableDevice(ws1)">使能</button>
+            <button onclick="disableDevice(ws1)">失能</button>
+            <button onclick="setZeroPoint(ws1, 'setZeroMotorId1')">设置零点</button>
+            <input type="number" id="setZeroMotorId1" min="1" max="31" required>
+            <div id="actionButtons1">
+                <button onclick="sendAction(ws1, prepareMotors1)">准备</button>
+                <button onclick="sendAction(ws1, raiseHandMotors1)">举手</button>
+                <button onclick="sendAction(ws1, waveHandMotors1)">挥手</button>
+            </div>
+            <div id="motorControls1"></div>
+            <button onclick="sendMotorCommand(ws1, motors1)">发送全部命令</button>
+            <div id="runDataControls1">
+                <button onclick="startReading(ws1, 'dataDisplay1')">开始读取数据</button>
+                <button onclick="stopReading('dataDisplay1')">停止读取数据</button>
+                <div id="dataDisplay1"></div>
+            </div>
+            <div id="limitControls1"></div>
+        </div>
+        <div class="column" id="right">
+            <h2>右手 (IP: 192.168.1.201)</h2>
+            <button onclick="enableDevice(ws2)">使能</button>
+            <button onclick="disableDevice(ws2)">失能</button>
+            <button onclick="setZeroPoint(ws2, 'setZeroMotorId2')">设置零点</button>
+            <input type="number" id="setZeroMotorId2" min="1" max="31" required>
+            <div id="actionButtons2">
+                <button onclick="sendAction(ws2, prepareMotors2)">准备</button>
+                <button onclick="sendAction(ws2, raiseHandMotors2)">举手</button>
+                <button onclick="sendAction(ws2, waveHandMotors2)">挥手</button>
+            </div>
+            <div id="motorControls2"></div>
+            <button onclick="sendMotorCommand(ws2, motors2)">发送全部命令</button>
+            <div id="runDataControls2">
+                <button onclick="startReading(ws2, 'dataDisplay2')">开始读取数据</button>
+                <button onclick="stopReading('dataDisplay2')">停止读取数据</button>
+                <div id="dataDisplay2"></div>
+            </div>
+            <div id="limitControls2"></div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="column">
+            <h2>同时控制 (左手 & 右手)</h2>
+            <button onclick="sendAction(ws1, prepareMotors1); sendAction(ws2, prepareMotors2);">准备</button>
+            <button onclick="sendAction(ws1, raiseHandMotors1); sendAction(ws2, raiseHandMotors2);">举手</button>
+            <button onclick="sendAction(ws1, waveHandMotors1); sendAction(ws2, waveHandMotors2);">挥手</button>
+            <button onclick="sendAction(ws1, action41); sendAction(ws2, action42);">夹取</button>
+            <button onclick="sendAction(ws1, action51); sendAction(ws2, action52);">提起</button>
+        </div>
+        <button onclick="initializeWebSocket()">连接 WebSocket</button>
+    </div>
+    <div id="dataDisplay1">左手数据显示区域</div>
+    <div id="dataDisplay2">右手数据显示区域</div>
+     
+    
+    <script>
+        let dataHistory1 = [];
+let dataHistory2 = [];
+const maxHistorySize = 8;  // 保持最多八条数据
+
+        let ws1, ws2;
+
+        function initializeWebSocket() {
+    ws1 = new WebSocket('ws://192.168.1.200:81');
+    ws2 = new WebSocket('ws://192.168.1.201:81');
+
+    ws1.onopen = function(event) {
+        console.log("Left hand device connected.");
+    };
+
+    ws2.onopen = function(event) {
+        console.log("Right hand device connected.");
+    };
+    ws1.onmessage = function(event) {
+    console.log("Message from server (Left hand):", event.data);
+    updateDataDisplay(event.data, dataHistory1, 'dataDisplay1');
+};
+
+ws2.onmessage = function(event) {
+    console.log("Message from server (Right hand):", event.data);
+    updateDataDisplay(event.data, dataHistory2, 'dataDisplay2');
+};
+
+
+    ws1.onerror = function(event) {
+        console.error("Error connecting to left hand device.");
+    };
+
+    ws2.onerror = function(event) {
+        console.error("Error connecting to right hand device.");
+    };
+}
+
+function updateDataDisplay(newData, dataHistory, displayId) {
+    // 添加新数据到数组的开始
+    dataHistory.unshift(newData);
+    // 如果超过了历史记录的最大数目，移除最老的数据
+    if (dataHistory.length > maxHistorySize) {
+        dataHistory.pop();
+    }
+    // 更新页面显示
+    const displayElement = document.getElementById(displayId);
+    displayElement.innerText = dataHistory.join('\n');  // 使用换行符来分隔各条数据
+}
+
+
+        let motors1 = createMotors(8);
+        let motors2 = createMotors(8);
+    const prepareMotors1 = [{ id: 1, position: 0, speed: 5 },
+    { id: 2, position: 30, speed: 5},
+    { id: 3, position: -20, speed: 5 },
+    { id: 4, position: 40, speed: 5 },
+    { id: 5, position: 0, speed: 5 },
+    { id: 6, position: 40, speed: 5 },
+    { id: 7, position: 0, speed: 5 },
+    { id: 8, position: 0, speed: 200}];        
+    
+    const prepareMotors2 = [{ id: 1, position: 0, speed: 5 },
+    { id: 2, position: -30, speed: 5},
+    { id: 3, position: 20, speed: 5 },
+    { id: 4, position: -40, speed: 5 },
+    { id: 5, position: 0, speed: 5 },
+    { id: 6, position: -40, speed: 5 },
+    { id: 7, position: 0, speed: 5 },
+    { id: 8, position: 0, speed: 200 }];
+    
+    const raiseHandMotors1 = [{ id: 1, position: -40, speed: 5 },
+    { id: 2, position: 10, speed: 5},
+    { id: 3, position: -3, speed: 5 },
+    { id: 4, position: 75, speed: 5 },
+    { id: 5, position: -5, speed: 5 },
+    { id: 6, position: -75, speed: 5 },
+    { id: 7, position: -35, speed: 5 },
+    { id: 8, position: 1500, speed: 200 }];
+        
+    const raiseHandMotors2 = [{ id: 1, position: 40, speed: 5 },
+    { id: 2, position: -5, speed: 5},
+    { id: 3, position: 3, speed: 5 },
+    { id: 4, position: -75, speed: 5 },
+    { id: 5, position: 10, speed: 5 },
+    { id: 6, position: 75, speed: 5 },
+    { id: 7, position: 0, speed: 5 },
+    { id: 8, position: 1500, speed: 200 }];
+
+        const waveHandMotors1 = [{ id: 1, position: -35, speed: 5 },
+    { id: 2, position: 10, speed: 5},
+    { id: 3, position: -3, speed: 5 },
+    { id: 4, position: 63, speed: 5 },
+    { id: 5, position: -5, speed: 5 },
+    { id: 6, position: -63, speed: 5 },
+    { id: 7, position: -35, speed: 5 },
+    { id: 8, position: 1500, speed: 200 }];       
+     const action41 = [{ id: 1, position: -35, speed: 5 },
+    { id: 2, position: 10, speed: 5},
+    { id: 3, position: -3, speed: 5 },
+    { id: 4, position: 63, speed: 5 },
+    { id: 5, position: -5, speed: 5 },
+    { id: 6, position: -63, speed: 5 },
+    { id: 7, position: -35, speed: 5 },
+    { id: 8, position: 0, speed: 200 }];    
+    const action51 = [{ id: 1, position: -35, speed: 5 },
+    { id: 2, position: 10, speed: 5},
+    { id: 3, position: -3, speed: 5 },
+    { id: 4, position: 85, speed: 5 },
+    { id: 5, position: -5, speed: 5 },
+    { id: 6, position: -85, speed: 5 },
+    { id: 7, position: -35, speed: 5 },
+    { id: 8, position: 0, speed: 200 }];
+
+        const waveHandMotors2 = [{ id: 1, position: 35, speed: 5 },
+    { id: 2, position: -5, speed: 5},
+    { id: 3, position: 3, speed: 5 },
+    { id: 4, position: -63, speed: 5 },
+    { id: 5, position: 10, speed: 5 },
+    { id: 6, position: 63, speed: 5 },
+    { id: 7, position: 0, speed: 5 },
+    { id: 8, position: 1500, speed: 200 }];
+    const action42 = [{ id: 1, position: 35, speed: 5 },
+    { id: 2, position: -5, speed: 5},
+    { id: 3, position: 3, speed: 5 },
+    { id: 4, position: -63, speed: 5 },
+    { id: 5, position: 10, speed: 5 },
+    { id: 6, position: 63, speed: 5 },
+    { id: 7, position: 0, speed: 5 },
+    { id: 8, position: 0, speed: 200 }];
+    const action52 = [{ id: 1, position: 35, speed: 5 },
+    { id: 2, position: -5, speed: 5},
+    { id: 3, position: 3, speed: 5 },
+    { id: 4, position: -85, speed: 5 },
+    { id: 5, position: 10, speed: 5 },
+    { id: 6, position: 85, speed: 5 },
+    { id: 7, position: 0, speed: 5 },
+    { id: 8, position: 0, speed: 200 }];
+
+        let readingInterval1, readingInterval2;
+
+        function createMotors(count) {
+            let motors = [];
+            for (let i = 1; i <= count; i++) {
+                motors.push({ id: i, position: 0, speed: 0 });
+            }
+            return motors;
+        }
+
+        function enableDevice(ws) {
+    const msg = JSON.stringify({ shi3neng: true });
+    ws.send(msg);
+    console.log('Enable command sent:', msg);
+}
+
+function disableDevice(ws) {
+    const msg = JSON.stringify({ shi1neng: true });
+    ws.send(msg);
+    console.log('Disable command sent:', msg);
+}
+
+function sendMotorCommand(ws, motors) {
+    const msg = JSON.stringify({ motors: motors });
+    ws.send(msg);
+    console.log('Motor command sent:', msg);
+}
+
+function setZeroPoint(ws, inputId) {
+    const motorId = document.getElementById(inputId).value;
+    if (motorId) {
+        const msg = JSON.stringify({ setZeroPoint: { motorId: Number(motorId) } });
+        ws.send(msg);
+        console.log('Set zero point command sent:', msg);
+    } else {
+        console.error('Motor ID is required to set zero point');
+    }
+}
+
+function startReading(ws, displayId) {
+    let motorId = 1;  // Assuming reading starts from motor 1
+    const interval = setInterval(() => {
+        const msg = JSON.stringify({
+            readRunData: { 
+                motorId: motorId,
+                parameter: 0  // As per your requirement that parameter is fixed at 0
+            }
+        });
+        ws.send(msg);
+        console.log('Read run data request sent for motor', motorId, ':', msg);
+        motorId = motorId % 8 + 1;  // Assuming you have 8 motors and loop from 1 to 8
+    }, 1000);  // 100 ms interval for sending read request
+    if (displayId === 'dataDisplay1') {
+        readingInterval1 = interval;
+    } else {
+        readingInterval2 = interval;
+    }
+}
+
+function stopReading(displayId) {
+    if (displayId === 'dataDisplay1') {
+        clearInterval(readingInterval1);
+    } else {
+        clearInterval(readingInterval2);
+    }
+}
+
+
+function initMotorControls(containerId, motors) {
+    const container = document.getElementById(containerId);
+    const isLeftHand = containerId.includes("1"); // 根据容器ID判断是左手还是右手
+    motors.forEach((motor, index) => {
+        const div = document.createElement('div');
+        div.className = 'motor-control';
+        div.innerHTML = `
+            <label>ID ${motor.id} Position:</label>
+            <input type="number" onchange="updateMotorData(${isLeftHand ? 'motors1' : 'motors2'}[${index}], 'position', this.value)" value="${motor.position}" />
+            <label>Speed:</label>
+            <input type="number" onchange="updateMotorData(${isLeftHand ? 'motors1' : 'motors2'}[${index}], 'speed', this.value)" value="${motor.speed}" />
+        `;
+        container.appendChild(div);
+    });
+}
+
+
+function sendAction(ws, actionMotors) {
+    const msg = JSON.stringify({ motors: actionMotors });
+    ws.send(msg);
+    console.log('Action command sent:', msg);
+}
+
+
+        function updateMotorData(motor, property, value) {
+            motor[property] = Number(value);
+        }
+
+        window.onload = function() {
+            initMotorControls('motorControls1', motors1);
+            initMotorControls('motorControls2', motors2);
+        };
+    </script>
+</body>
+</html>
